@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-28T11:58:28.983Z",
+  "generatedAt": "2026-02-28T12:16:50.731Z",
   "fixtureCount": 9,
   "passCount": 9,
   "accuracy": 100,
@@ -43,14 +43,15 @@
       "detectedProfile": "ops-swarm",
       "mode": "multi-agent",
       "pass": true,
-      "score": 7,
+      "score": 8,
       "reason": "rule-match",
       "hits": [
         "gateway timeout",
         "uptime",
         "latency",
         "cron",
-        "timeout"
+        "timeout",
+        "incident"
       ]
     },
     {

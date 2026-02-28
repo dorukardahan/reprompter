@@ -261,6 +261,16 @@ Verification scenarios for the RePrompter skill. Run these manually to validate 
 - `benchmarks/observability/v8.3-observability-report.md` and `.json` are generated
 - Report includes run count, stall/timeout rates, stage latency summary, provider distribution
 
+## Scenario 27: Real-World Benchmark Coverage
+
+**Input:** Real-world routing + artifact fixtures (`benchmarks/fixtures/realworld-routing-fixtures.json`, `benchmarks/fixtures/realworld-artifact-fixtures.json`)
+**Expected:** Real-world benchmark validates routing precision and evaluator correctness at larger sample size.
+**Verify:**
+- `npm run benchmark:realworld` reports routing accuracy 100% (64/64)
+- `npm run benchmark:realworld` reports artifact accuracy 100% (84/84)
+- Output includes Wilson 95% confidence intervals in markdown/json reports
+- Artifacts are generated at `benchmarks/v8.3-realworld-benchmark.md` and `.json`
+
 ---
 
 ## Anti-Patterns (Should NOT Happen)

@@ -85,6 +85,20 @@ test("auto-detects multi-domain prompts as multi-agent without explicit trigger"
   assert.equal(result.profile, "engineering-swarm");
 });
 
+test("keeps single mode for simple prompts that mention api and auth", () => {
+  const result = routeIntent("improve api auth flow");
+  assert.equal(result.mode, "single");
+  assert.equal(result.profile, "single");
+  assert.equal(result.reason, "single-mode-intent");
+});
+
+test("falls back to repromptverse when only one routing keyword matches", () => {
+  const result = routeIntent("repromptverse backend");
+  assert.equal(result.mode, "multi-agent");
+  assert.equal(result.profile, "repromptverse");
+  assert.equal(result.reason, "generic-multi-agent-fallback");
+});
+
 test("forceSingle overrides explicit profile triggers", () => {
   const result = routeIntent("ops swarm incident response", { forceSingle: true });
   assert.equal(result.mode, "single");

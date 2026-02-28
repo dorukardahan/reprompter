@@ -26,6 +26,19 @@ const MULTI_AGENT_TRIGGERS = [
 ];
 
 const COMPLEXITY_TRIGGERS = ["parallel", "in parallel"];
+const COORDINATION_SCOPE_TRIGGERS = [
+  "coordinate",
+  "workstream",
+  "workstreams",
+  "across",
+  "cross-functional",
+  "cross functional",
+  "end-to-end",
+  "end to end",
+  "orchestrate",
+  "integration",
+];
+const MIN_RULE_SCORE = 2;
 
 const DOMAIN_KEYWORD_SETS = [
   { domain: "frontend", keywords: ["frontend", "ui", "react", "nextjs", "next.js"] },
@@ -86,6 +99,7 @@ const ROUTING_RULES = [
     profile: "ops-swarm",
     weightedPhrases: [
       "incident response",
+      "incident containment",
       "root cause",
       "postmortem",
       "gateway timeout",
@@ -107,6 +121,9 @@ const ROUTING_RULES = [
       "timeout",
       "health",
       "deployment",
+      "incident",
+      "observability",
+      "recovery",
     ],
   },
   {
@@ -117,7 +134,9 @@ const ROUTING_RULES = [
       "compare options",
       "benchmark",
       "decision memo",
+      "decision matrix",
       "evidence quality",
+      "evidence scoring",
       "competitive analysis",
       "market scan",
       "literature review",
@@ -200,10 +219,18 @@ function countDistinctDomains(text) {
   return count;
 }
 
+function hasCoordinationScopeSignal(text) {
+  if (COORDINATION_SCOPE_TRIGGERS.some((trigger) => hasPhrase(text, trigger))) return true;
+  // Treat comma+and list language as a weak scope signal for multi-domain orchestration.
+  return text.includes(",") && hasKeyword(text, "and");
+}
+
 function detectImplicitMultiAgent(text) {
   if (hasKeyword(text, "audit")) return true;
   if (COMPLEXITY_TRIGGERS.some((trigger) => hasPhrase(text, trigger))) return true;
-  return countDistinctDomains(text) >= 2;
+  const domainCount = countDistinctDomains(text);
+  if (domainCount < 2) return false;
+  return hasCoordinationScopeSignal(text);
 }
 
 function isMultiAgentIntent(text, options = {}) {
@@ -266,7 +293,7 @@ function routeIntent(input, options = {}) {
 
   const ranked = rankCandidates(ROUTING_RULES.map((rule) => scoreRule(text, rule)));
   const best = ranked[0];
-  if (!best || best.score === 0) {
+  if (!best || best.score < MIN_RULE_SCORE) {
     return {
       mode: "multi-agent",
       profile: "repromptverse",

@@ -8,7 +8,7 @@
 
 **Your prompt sucks. Let's fix that.**
 
-[![Version](https://img.shields.io/badge/version-8.3.0-0969da)](https://github.com/aytuncyildizli/reprompter/releases)
+[![Version](https://img.shields.io/badge/version-8.3.1-0969da)](https://github.com/aytuncyildizli/reprompter/releases)
 [![License](https://img.shields.io/github/license/aytuncyildizli/reprompter?color=2da44e)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/aytuncyildizli/reprompter?style=flat&color=f0883e)](https://github.com/aytuncyildizli/reprompter/stargazers)
 [![Issues](https://img.shields.io/github/issues/aytuncyildizli/reprompter?color=da3633)](https://github.com/aytuncyildizli/reprompter/issues)
@@ -19,7 +19,7 @@
 
 ---
 
-RePrompter interviews you, figures out what you actually want, and writes the prompt you were too lazy to write yourself. **v8.3 adds provider-aware subagent routing, layered context budgets, strict artifact gating, runtime feature flags, and benchmarkable prompt/context pattern packs.**
+RePrompter interviews you, figures out what you actually want, and writes the prompt you were too lazy to write yourself. **v8.3.1 adds real-world benchmark coverage, tighter implicit routing heuristics, and calibrated evaluator scoring gates.**
 
 Compatibility:
 - **Single prompt-improvement mode:** Claude Code, OpenClaw, Codex, or any structured-prompt LLM
@@ -53,9 +53,10 @@ Microsoft-inspired design patterns adopted in Repromptverse:
 - Evaluator loop (score -> delta retry)
 
 Quick links:
-- Release: https://github.com/AytuncYildizli/reprompter/releases/tag/v8.3.0
+- Release: https://github.com/AytuncYildizli/reprompter/releases
 - Benchmark report: `benchmarks/v8.3-swarm-benchmark.md`
 - Provider benchmark: `benchmarks/v8.3-provider-benchmark.md`
+- Real-world benchmark: `benchmarks/v8.3-realworld-benchmark.md`
 
 ## v8.3 Runtime Optimization Track
 
@@ -579,6 +580,7 @@ npm run test:telemetry-store
 npm run test:observability-report
 npm run benchmark:swarms
 npm run benchmark:provider
+npm run benchmark:realworld
 npm run telemetry:report
 npm run check
 ```
@@ -588,6 +590,8 @@ Generated benchmark artifacts:
 - `benchmarks/v8.3-swarm-benchmark.json`
 - `benchmarks/v8.3-provider-benchmark.md`
 - `benchmarks/v8.3-provider-benchmark.json`
+- `benchmarks/v8.3-realworld-benchmark.md`
+- `benchmarks/v8.3-realworld-benchmark.json`
 - `benchmarks/observability/v8.3-observability-report.md`
 - `benchmarks/observability/v8.3-observability-report.json`
 
@@ -601,6 +605,8 @@ Current benchmark snapshot (fixture-driven):
 | Proxy quality | 10/10 (domain swarms), 8/10 (generic repromptverse) |
 | Provider routing benchmark | 100% (5/5) |
 | Artifact evaluator benchmark | 100% (4/4) |
+| Real-world routing benchmark | 100% (64/64) |
+| Real-world artifact benchmark | 100% (84/84) |
 
 Codex troubleshooting:
 

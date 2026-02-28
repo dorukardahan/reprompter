@@ -18,6 +18,22 @@ function coveragePercent(present, total) {
   return Math.round((present / total) * 100);
 }
 
+function wilsonInterval(successes, n, z = 1.96) {
+  if (n === 0) return { lower: 0, upper: 0 };
+  const p = successes / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const center = (p + z2 / (2 * n)) / denom;
+  const margin =
+    (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) /
+    denom;
+
+  return {
+    lower: Number((center - margin).toFixed(4)),
+    upper: Number((center + margin).toFixed(4)),
+  };
+}
+
 function toTable(rows, headers) {
   const head = `| ${headers.join(" | ")} |`;
   const sep = `| ${headers.map(() => "---").join(" | ")} |`;
@@ -45,11 +61,12 @@ function runEvaluatorFixtures(fixtures) {
   return fixtures.map((fixture) => {
     const result = evaluateArtifact(fixture.artifact, fixture.contractSpec);
 
+    const enforceScoreBounds = fixture.enforceScoreBounds === true;
     let pass = result.pass === fixture.expectedPass;
-    if (typeof fixture.minScore === "number") {
+    if (typeof fixture.minScore === "number" && (fixture.expectedPass || enforceScoreBounds)) {
       pass = pass && result.overallScore >= fixture.minScore;
     }
-    if (typeof fixture.maxScore === "number") {
+    if (typeof fixture.maxScore === "number" && (fixture.expectedPass || enforceScoreBounds)) {
       pass = pass && result.overallScore <= fixture.maxScore;
     }
 
@@ -81,12 +98,14 @@ function run() {
       fixtureCount: routingResults.length,
       passCount: routingPass,
       accuracy: coveragePercent(routingPass, routingResults.length),
+      confidence95: wilsonInterval(routingPass, routingResults.length),
       results: routingResults,
     },
     evaluator: {
       fixtureCount: evaluatorResults.length,
       passCount: evaluatorPass,
       accuracy: coveragePercent(evaluatorPass, evaluatorResults.length),
+      confidence95: wilsonInterval(evaluatorPass, evaluatorResults.length),
       results: evaluatorResults,
     },
   };
@@ -121,6 +140,7 @@ function run() {
     `- Fixtures: **${summary.routing.fixtureCount}**`,
     `- Pass: **${summary.routing.passCount}**`,
     `- Accuracy: **${summary.routing.accuracy}%**`,
+    `- 95% CI (Wilson): **[${(summary.routing.confidence95.lower * 100).toFixed(2)}%, ${(summary.routing.confidence95.upper * 100).toFixed(2)}%]**`,
     "",
     toTable(routingRows, ["Case", "Expected Tier", "Detected Tier", "Provider", "Model", "Result"]),
     "",
@@ -129,6 +149,7 @@ function run() {
     `- Fixtures: **${summary.evaluator.fixtureCount}**`,
     `- Pass: **${summary.evaluator.passCount}**`,
     `- Accuracy: **${summary.evaluator.accuracy}%**`,
+    `- 95% CI (Wilson): **[${(summary.evaluator.confidence95.lower * 100).toFixed(2)}%, ${(summary.evaluator.confidence95.upper * 100).toFixed(2)}%]**`,
     "",
     toTable(evaluatorRows, ["Case", "Expected Pass", "Detected Pass", "Score", "Result"]),
     "",

@@ -1,6 +1,6 @@
 {
   "name": "reprompter",
-  "version": "8.3.0",
+  "version": "8.3.1",
   "private": true,
   "description": "Prompt engineering skill for Claude Code, OpenClaw, and Codex",
   "scripts": {
@@ -17,8 +17,9 @@
     "test:observability-report": "node --test scripts/run-observability-report.test.js",
     "benchmark:swarms": "node scripts/run-swarm-benchmark.js",
     "benchmark:provider": "node scripts/run-provider-benchmark.js",
+    "benchmark:realworld": "node scripts/run-realworld-benchmark.js",
     "telemetry:report": "node scripts/run-observability-report.js",
-    "check": "npm run validate:templates && npm run test:intent-router && npm run test:capability-policy && npm run test:context-builder && npm run test:artifact-evaluator && npm run test:pattern-selector && npm run test:runtime-adapter && npm run test:repromptverse-runtime && npm run test:telemetry-schema && npm run test:telemetry-store && npm run test:observability-report && npm run benchmark:swarms && npm run benchmark:provider"
+    "check": "npm run validate:templates && npm run test:intent-router && npm run test:capability-policy && npm run test:context-builder && npm run test:artifact-evaluator && npm run test:pattern-selector && npm run test:runtime-adapter && npm run test:repromptverse-runtime && npm run test:telemetry-schema && npm run test:telemetry-store && npm run test:observability-report && npm run benchmark:swarms && npm run benchmark:provider && npm run benchmark:realworld"
   },
   "repository": {
     "type": "git",

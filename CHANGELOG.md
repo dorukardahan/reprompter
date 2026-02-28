@@ -1,5 +1,19 @@
 # RePrompter Changelog
 
+## v8.3.1 (2026-02-28)
+
+### Added
+- **Real-world benchmark harness** — `scripts/run-realworld-benchmark.js` with routing + artifact fixture evaluation and Wilson 95% confidence intervals
+- **Expanded real-world fixtures** — `benchmarks/fixtures/realworld-routing-fixtures.json` (64 cases) and `benchmarks/fixtures/realworld-artifact-fixtures.json` (84 cases)
+- **Real-world benchmark artifacts** — `benchmarks/v8.3-realworld-benchmark.md` and `benchmarks/v8.3-realworld-benchmark.json`
+- **Router regression coverage** for low-signal multi-agent fallbacks and single-mode false-positive protection (`scripts/intent-router.test.js`)
+
+### Fixed
+- **Implicit multi-agent over-triggering** in `scripts/intent-router.js` by requiring coordination-scope signals for multi-domain auto-detection
+- **Weak single-keyword profile matches** now fall back to generic `repromptverse` via a minimum routing score gate
+- **Ops/research routing misses** improved with additional domain phrases (`incident containment`, `recovery`, `decision matrix`, `evidence scoring`)
+- **Benchmark evaluator pass accounting** in `scripts/run-provider-benchmark.js` and `scripts/run-realworld-benchmark.js` so score bounds are only enforced for expected-pass fixtures by default (with `enforceScoreBounds` opt-in)
+
 ## v8.3.0 (2026-02-28)
 
 ### Added
