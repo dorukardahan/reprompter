@@ -271,6 +271,54 @@ Verification scenarios for the RePrompter skill. Run these manually to validate 
 - Output includes Wilson 95% confidence intervals in markdown/json reports
 - Artifacts are generated at `benchmarks/v8.3-realworld-benchmark.md` and `.json`
 
+## Scenario 28: Recipe Fingerprint Determinism
+
+**Input:** Fingerprint benchmark fixture set (`benchmarks/fixtures/flywheel-benchmark-fixtures.json`, `fingerprint_determinism`)
+**Expected:** Identical recipe inputs produce identical hashes; different inputs produce different hashes; pattern order and case do not affect output.
+**Verify:**
+- `npm run test:recipe-fingerprint` passes (14 tests)
+- `npm run benchmark:flywheel` reports fingerprint accuracy 100% (4/4)
+
+## Scenario 29: Outcome Collection and Effectiveness Scoring
+
+**Input:** Outcome collector unit suite (`scripts/outcome-collector.test.js`) + effectiveness benchmark fixtures
+**Expected:** Outcomes are validated, stored to NDJSON, filtered by domain, and effectiveness scores correctly computed from signals.
+**Verify:**
+- `npm run test:outcome-collector` passes (19 tests)
+- `npm run benchmark:flywheel` reports effectiveness accuracy 100% (6/6)
+- Signals are sanitized: negatives clamped, invalid types stripped, unknown verdicts rejected
+- User reject verdict caps score at 3.0; user accept floors at 7.0
+
+## Scenario 30: Strategy Learning and Recommendation
+
+**Input:** Strategy learner unit suite (`scripts/strategy-learner.test.js`) + strategy benchmark fixtures
+**Expected:** Learner queries outcome ledger, groups by recipe hash, computes time-decay weighted scores, and recommends best recipe.
+**Verify:**
+- `npm run test:strategy-learner` passes (15 tests)
+- `npm run benchmark:flywheel` reports strategy accuracy 100% (3/3)
+- Empty store returns `hasData: false` with helpful message
+- Insufficient samples (<2) returns no recommendation
+- 3+ similar outcomes return recommendation with confidence level
+
+## Scenario 31: Flywheel Runtime Integration
+
+**Input:** Run `buildExecutionPlan` and `executePlan` with `flywheel: true` feature flag
+**Expected:** Recipe fingerprint is computed at plan_ready; outcome is collected at finalize_run; telemetry includes `fingerprint_recipe`, `collect_outcome`, and `learn_strategy` events.
+**Verify:**
+- `npm run test:repromptverse-runtime` passes
+- Plan result includes `recipeFingerprint` and `flywheelRecommendation` fields
+- Execution result includes `outcomeRecord` field
+- `.reprompter/flywheel/outcomes.ndjson` contains outcome entry after execution
+
+## Scenario 32: Flywheel Privacy (Local-Only Storage)
+
+**Setup:** Run a full Repromptverse cycle with flywheel enabled.
+**Expected:** All flywheel data stored in `.reprompter/flywheel/` locally. No network calls.
+**Verify:**
+- Outcome file exists at `.reprompter/flywheel/outcomes.ndjson`
+- No HTTP/fetch imports in any flywheel module
+- Module source contains only `fs`, `path`, `crypto`, `child_process` (execFileSync for git) imports
+
 ---
 
 ## Anti-Patterns (Should NOT Happen)

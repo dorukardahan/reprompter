@@ -1,5 +1,22 @@
 # RePrompter Changelog
 
+## v9.0.0 (2026-03-15)
+
+### Added
+- **Prompt Flywheel engine** — closed-loop outcome learning system that gets smarter with every use
+- **Recipe fingerprinting** — `scripts/recipe-fingerprint.js` produces deterministic SHA-256 hashes of prompt strategy vectors (template + patterns + tier + domain + layers + quality bucket). Order-invariant, case-insensitive.
+- **Outcome collection** — `scripts/outcome-collector.js` passively captures execution signals (artifact score/pass, retry count, execution time) and links them to recipe fingerprints. Storage: `.reprompter/flywheel/outcomes.ndjson`
+- **Strategy learning** — `scripts/strategy-learner.js` queries the outcome ledger for similar past tasks, computes time-decay weighted effectiveness scores (7-day half-life), and recommends best-performing recipes with confidence levels
+- **Runtime integration** — flywheel hooks at `plan_ready` (fingerprint + strategy lookup) and `finalize_run` (outcome collection) in `scripts/repromptverse-runtime.js`
+- **Feature flag** — `REPROMPTER_FLYWHEEL=0|1` for controlled rollout (enabled by default)
+- **Telemetry stages** — 3 new event types: `fingerprint_recipe`, `collect_outcome`, `learn_strategy`
+- **Flywheel benchmark harness** — `scripts/run-flywheel-benchmark.js` with 13 fixtures covering fingerprint determinism (4), effectiveness scoring (6), and strategy learning (3) with Wilson 95% CI
+- **Unit test suites** — `recipe-fingerprint.test.js` (14 tests), `outcome-collector.test.js` (19 tests), `strategy-learner.test.js` (15 tests)
+- **npm scripts** — `test:recipe-fingerprint`, `test:outcome-collector`, `test:strategy-learner`, `benchmark:flywheel`, `flywheel:report`
+
+### Privacy
+- All flywheel data is stored locally in `.reprompter/flywheel/`. No data is transmitted anywhere.
+
 ## v8.3.1 (2026-02-28)
 
 ### Added

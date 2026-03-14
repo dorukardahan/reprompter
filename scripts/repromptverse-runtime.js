@@ -8,12 +8,16 @@ const { buildAgentContext, approxTokens } = require("./context-builder");
 const { createRuntimeAdapter } = require("./runtime-adapter");
 const { evaluateArtifact } = require("./artifact-evaluator");
 const { createTelemetryStore } = require("./telemetry-store");
+const { fingerprint: fingerprintRecipe } = require("./recipe-fingerprint");
+const { createOutcomeStore, computeEffectiveness } = require("./outcome-collector");
+const { recommendStrategy } = require("./strategy-learner");
 
 const FEATURE_ENV = {
   policyEngine: "REPROMPTER_POLICY_ENGINE",
   layeredContext: "REPROMPTER_LAYERED_CONTEXT",
   strictEval: "REPROMPTER_STRICT_EVAL",
   patternLibrary: "REPROMPTER_PATTERN_LIBRARY",
+  flywheel: "REPROMPTER_FLYWHEEL",
 };
 
 function parseBooleanEnv(raw, defaultValue) {
@@ -42,6 +46,9 @@ function resolveFeatureFlags(overrides = {}) {
     patternLibrary:
       flagOverrides.patternLibrary ??
       parseBooleanEnv(process.env[FEATURE_ENV.patternLibrary], true),
+    flywheel:
+      flagOverrides.flywheel ??
+      parseBooleanEnv(process.env[FEATURE_ENV.flywheel], true),
   };
 }
 
@@ -298,6 +305,57 @@ function buildExecutionPlan(rawTask, options = {}) {
     },
   });
 
+  // Flywheel: fingerprint the recipe at plan_ready
+  let recipeFingerprint = null;
+  let flywheelRecommendation = null;
+  if (featureFlags.flywheel) {
+    const fpStart = Date.now();
+    recipeFingerprint = fingerprintRecipe({
+      templateId: intent.profile,
+      patterns: patternSelection.patternIds,
+      capabilityTier: modelPlan.selected.capabilityTier || "default",
+      domain,
+      contextLayers: Array.isArray(contextPlan.manifest?.layers)
+        ? contextPlan.manifest.layers.length
+        : 0,
+      qualityScore: options.qualityScore || 0,
+    });
+    emitStageEvent(telemetry, baseEvent, {
+      stage: "fingerprint_recipe",
+      status: "ok",
+      latencyMs: Date.now() - fpStart,
+      metadata: {
+        hash: recipeFingerprint.hash,
+        readable: recipeFingerprint.readable,
+      },
+    });
+
+    // Check for historical recommendations
+    const learnStart = Date.now();
+    try {
+      flywheelRecommendation = recommendStrategy(recipeFingerprint.vector, {
+        rootDir: options.rootDir || process.cwd(),
+        domain,
+      });
+      emitStageEvent(telemetry, baseEvent, {
+        stage: "learn_strategy",
+        status: "ok",
+        latencyMs: Date.now() - learnStart,
+        metadata: {
+          hasData: flywheelRecommendation.hasData,
+          hasRecommendation: flywheelRecommendation.recommendation !== null,
+          totalOutcomes: flywheelRecommendation.totalOutcomes || 0,
+        },
+      });
+    } catch {
+      emitStageEvent(telemetry, baseEvent, {
+        stage: "learn_strategy",
+        status: "error",
+        latencyMs: Date.now() - learnStart,
+      });
+    }
+  }
+
   emitStageEvent(telemetry, baseEvent, {
     stage: "plan_ready",
     status: "ok",
@@ -306,6 +364,7 @@ function buildExecutionPlan(rawTask, options = {}) {
       domain,
       preferredOutcome,
       profile: intent.profile,
+      flywheelHash: recipeFingerprint ? recipeFingerprint.hash : null,
     },
   });
 
@@ -322,6 +381,8 @@ function buildExecutionPlan(rawTask, options = {}) {
     taskSpec,
     modelPlan,
     contextPlan,
+    recipeFingerprint,
+    flywheelRecommendation,
   };
 }
 
@@ -421,6 +482,45 @@ async function executePlan(plan, options = {}) {
     },
   });
 
+  // Flywheel: collect outcome signals and persist
+  let outcomeRecord = null;
+  if (featureFlags.flywheel && plan.recipeFingerprint) {
+    const collectStart = Date.now();
+    try {
+      const outcomeStore = createOutcomeStore({
+        rootDir: plan.taskSpec?.rootDir || options.rootDir || process.cwd(),
+      });
+      const signals = {
+        artifactScore: evaluation ? evaluation.overallScore : null,
+        artifactPass: evaluation ? evaluation.pass : null,
+        retryCount: Number(options.retryCount || 0),
+        executionMs: Date.now() - (options._executionStartMs || Date.now()),
+      };
+      outcomeRecord = outcomeStore.writeOutcome({
+        runId: baseEvent.runId,
+        taskId: baseEvent.taskId,
+        recipe: plan.recipeFingerprint,
+        signals,
+        effectivenessScore: computeEffectiveness(signals),
+      });
+      emitStageEvent(telemetry, baseEvent, {
+        stage: "collect_outcome",
+        status: "ok",
+        latencyMs: Date.now() - collectStart,
+        metadata: {
+          effectivenessScore: outcomeRecord.effectivenessScore,
+          recipeHash: plan.recipeFingerprint.hash,
+        },
+      });
+    } catch {
+      emitStageEvent(telemetry, baseEvent, {
+        stage: "collect_outcome",
+        status: "error",
+        latencyMs: Date.now() - collectStart,
+      });
+    }
+  }
+
   return {
     adapter: {
       runtime: adapter.name,
@@ -432,6 +532,7 @@ async function executePlan(plan, options = {}) {
     spawnResult,
     pollResult,
     evaluation,
+    outcomeRecord,
   };
 }
 

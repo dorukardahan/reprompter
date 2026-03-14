@@ -12,6 +12,9 @@ const STAGES = new Set([
   "evaluate_artifact",
   "retry_artifact",
   "finalize_run",
+  "fingerprint_recipe",
+  "collect_outcome",
+  "learn_strategy",
 ]);
 
 const STATUSES = new Set(["ok", "error", "stalled", "timeout", "skipped"]);

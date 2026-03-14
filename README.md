@@ -8,7 +8,7 @@
 
 **Your prompt sucks. Let's fix that.**
 
-[![Version](https://img.shields.io/badge/version-8.3.1-0969da)](https://github.com/aytuncyildizli/reprompter/releases)
+[![Version](https://img.shields.io/badge/version-9.0.0-0969da)](https://github.com/aytuncyildizli/reprompter/releases)
 [![License](https://img.shields.io/github/license/aytuncyildizli/reprompter?color=2da44e)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/aytuncyildizli/reprompter?style=flat&color=f0883e)](https://github.com/aytuncyildizli/reprompter/stargazers)
 [![Issues](https://img.shields.io/github/issues/aytuncyildizli/reprompter?color=da3633)](https://github.com/aytuncyildizli/reprompter/issues)
@@ -19,7 +19,7 @@
 
 ---
 
-RePrompter interviews you, figures out what you actually want, and writes the prompt you were too lazy to write yourself. **v8.3.1 adds real-world benchmark coverage, tighter implicit routing heuristics, and calibrated evaluator scoring gates.**
+RePrompter interviews you, figures out what you actually want, and writes the prompt you were too lazy to write yourself. **v9.0.0 adds the Prompt Flywheel — closed-loop outcome learning that makes reprompter smarter every time you use it.**
 
 Compatibility:
 - **Single prompt-improvement mode:** Claude Code, OpenClaw, Codex, or any structured-prompt LLM
@@ -38,25 +38,32 @@ Compatibility matrix:
 
 <br/>
 
-## v8.3 Highlights
+## v9.0 Highlights — Prompt Flywheel
 
-- Repromptverse is now the single multi-agent mode.
-- Domain swarm routing is built-in: marketing, engineering, ops, research.
-- Deterministic intent router + unit tests.
-- Fixture-driven benchmark harness with reproducible reports.
-- Codex + Claude + OpenClaw operational parity.
+**The prompt engineer that gets smarter every time you use it.**
 
-Microsoft-inspired design patterns adopted in Repromptverse:
-- Selector-style routing policy (explicit next speaker / owner)
-- Termination contracts (max turn/time + no-progress stop)
-- Artifact contracts (one writer per output path + handoff schema)
-- Evaluator loop (score -> delta retry)
+- **Recipe fingerprinting** — every generated prompt carries a deterministic hash of its strategy (template + patterns + capability tier + domain + context layers + quality bucket)
+- **Passive outcome collection** — after execution, signals are captured automatically (artifact scores, retry count, execution time) and linked to the recipe fingerprint
+- **Adaptive strategy learning** — on future runs, the flywheel queries historical outcomes and recommends the best-performing recipe for similar tasks
+- **Time-decay weighted scoring** — recent outcomes matter more (7-day half-life)
+- **Fully local** — all flywheel data stored in `.reprompter/flywheel/outcomes.ndjson`. Nothing is transmitted anywhere.
+- Feature flag: `REPROMPTER_FLYWHEEL=0|1` (enabled by default)
 
 Quick links:
 - Release: https://github.com/AytuncYildizli/reprompter/releases
-- Benchmark report: `benchmarks/v8.3-swarm-benchmark.md`
+- Flywheel benchmark: `benchmarks/v9.0-flywheel-benchmark.md`
+- Swarm benchmark: `benchmarks/v8.3-swarm-benchmark.md`
 - Provider benchmark: `benchmarks/v8.3-provider-benchmark.md`
 - Real-world benchmark: `benchmarks/v8.3-realworld-benchmark.md`
+
+## v9.0 Prompt Flywheel Engine
+
+- **Recipe fingerprinting** (`scripts/recipe-fingerprint.js`) — deterministic SHA-256 hash of prompt strategy vector (template, patterns, capability tier, domain, context layers, quality bucket). Order-invariant, case-insensitive.
+- **Outcome collection** (`scripts/outcome-collector.js`) — passive signal capture at finalize_run: artifact evaluator score/pass, retry count, execution time. NDJSON store at `.reprompter/flywheel/outcomes.ndjson`.
+- **Strategy learning** (`scripts/strategy-learner.js`) — queries outcome ledger for similar recipes (Jaccard similarity on pattern sets + exact match on template/domain/tier), computes time-decay weighted effectiveness scores (7-day half-life), recommends best historical recipe with confidence level.
+- **Runtime integration** — flywheel hooks at `plan_ready` (fingerprint + strategy lookup) and `finalize_run` (outcome collection) in `scripts/repromptverse-runtime.js`.
+- **Feature flag**: `REPROMPTER_FLYWHEEL=0|1` (default: enabled).
+- **Flywheel benchmark**: 13 fixtures covering fingerprint determinism, effectiveness scoring, and strategy learning accuracy.
 
 ## v8.3 Runtime Optimization Track
 
@@ -578,10 +585,15 @@ npm run test:repromptverse-runtime
 npm run test:telemetry-schema
 npm run test:telemetry-store
 npm run test:observability-report
+npm run test:recipe-fingerprint
+npm run test:outcome-collector
+npm run test:strategy-learner
 npm run benchmark:swarms
 npm run benchmark:provider
 npm run benchmark:realworld
+npm run benchmark:flywheel
 npm run telemetry:report
+npm run flywheel:report
 npm run check
 ```
 
@@ -607,6 +619,9 @@ Current benchmark snapshot (fixture-driven):
 | Artifact evaluator benchmark | 100% (4/4) |
 | Real-world routing benchmark | 100% (64/64) |
 | Real-world artifact benchmark | 100% (84/84) |
+| Flywheel fingerprint benchmark | 100% (4/4) |
+| Flywheel effectiveness benchmark | 100% (6/6) |
+| Flywheel strategy benchmark | 100% (3/3) |
 
 Codex troubleshooting:
 
