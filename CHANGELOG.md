@@ -1,3 +1,10 @@
+# [9.2.0](https://github.com/AytuncYildizli/reprompter/compare/v9.1.0...v9.2.0) (2026-03-14)
+
+
+### Features
+
+* release v9.1.0 closed-loop flywheel ([9934c75](https://github.com/AytuncYildizli/reprompter/commit/9934c7572c497d512045f15982e8ed164dd8c87c))
+
 # RePrompter Changelog
 
 ## v9.1.0 (2026-03-15)
