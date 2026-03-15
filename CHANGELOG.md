@@ -1,3 +1,10 @@
+## [9.2.1](https://github.com/AytuncYildizli/reprompter/compare/v9.2.0...v9.2.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* resolve 7 critical flywheel gaps (3-agent parallel fix) ([5969e25](https://github.com/AytuncYildizli/reprompter/commit/5969e25cbc4cd6d6cbd577b75a5cc895c1f47cf8))
+
 # [9.2.0](https://github.com/AytuncYildizli/reprompter/compare/v9.1.0...v9.2.0) (2026-03-14)
 
 
