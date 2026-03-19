@@ -38,6 +38,19 @@ Compatibility matrix:
 
 <br/>
 
+## v10.0 Highlights — Repromptmania
+
+**Agents now ask before they act, and show what they found.**
+
+- **Dimension Interview** — Repromptverse Phase 1 scores your raw prompt on 4 dimensions (Clarity, Specificity, Constraints, Decomposition). Low-scoring dimensions become targeted questions (0-4 max). No more vague prompts spawning expensive agents.
+- **Agent Cards** — three transparency layers:
+  - **Plan Cards** (Phase 1): see every agent's role, scope, exclusions, and output path before execution
+  - **Status Line** (Phase 3): compact emoji-based polling (✅ ⏳ 🔄) during execution
+  - **Result Cards** (Phase 4): per-agent score, finding count, and key insight before synthesis
+- **User confirmation gate** — team plan shown before execution; you approve, adjust, or cancel before any agent runs
+- **interviewContext** — interview responses feed directly into agent scope, constraints, and success criteria
+- 42 test scenarios, 9 anti-patterns
+
 ## v9.0 Highlights — Prompt Flywheel
 
 **The prompt engineer that gets smarter every time you use it.**
