@@ -332,6 +332,73 @@ When `successCriteria` is not gathered (question not asked or user skipped), omi
 
 **Flywheel:** interviewContext is excluded from recipe fingerprint hash. The fingerprint captures strategy (template + patterns + tier), not user scope answers.
 
+### Agent Cards (transparency layer)
+
+Three fixed-format card types rendered at different phases. Templates are exact — do not invent new formats.
+
+#### Plan Cards — rendered at end of Phase 1 (step 5)
+
+After team plan is complete, before Phase 2 prompt writing. Use this exact table format:
+
+```markdown
+## Team: {N} Opus Agents ({Parallel|Sequential})
+
+| # | Agent | Scope | Excludes | Output |
+|---|-------|-------|----------|--------|
+| 1 | {role} | {scope} | {excludes or "-"} | {output path} |
+| 2 | {role} | {scope} | {excludes or "-"} | {output path} |
+
+Interview context applied: {summary of influence, including override conflicts, or "No interview (high-quality prompt)", or "Interview: skipped by user"}
+```
+
+**Rules:**
+- MUST appear before any agent is launched
+- If interview ran, show which constraints came from interview vs auto-detected
+- If user requests agent adjustments at confirmation gate, re-render Plan Cards with updated team
+- Single-agent runs: table renders with one row (valid)
+
+#### Status Line — rendered during Phase 3 polling
+
+Compact one-line status with each poll cycle:
+
+```
+Agents: ✅ 2/4  ⏳ 1/4  🔄 1/4 (retry 1)
+```
+
+**Rules:**
+- Replace verbose poll output with this compact format
+- Platform-dependent: TeamCreate uses TaskList status; tmux uses best-effort pane parsing; sequential is trivial
+- Show retry count for retrying agents
+
+#### Result Cards — rendered at start of Phase 4
+
+After reading all agent outputs, before synthesis. Use this exact table format:
+
+```markdown
+## Results
+
+| Agent | Score | Findings | Key Insight |
+|-------|-------|----------|-------------|
+| {role} | {score}/10 {pass/retry emoji} | {count} findings | {one-sentence top finding} |
+
+Total: {N} findings | {accepted}/{total} accepted | {retry_count} retries
+```
+
+**Rules:**
+- MUST appear before synthesis is written
+- "Key Insight" = single most important finding per agent (forces prioritization)
+- Retry agents show retry reason in findings column
+
+#### Token budget (Agent Cards + Dimension Interview)
+
+| Phase | Extra tokens | Source |
+|-------|-------------|--------|
+| Phase 1 (interview) | 100-400 | AskUserQuestion calls (0-4 questions) + option generation from config/directory scan |
+| Phase 1 (plan cards) | 100-300 | Table render (varies by team size) |
+| Phase 3 (status) | ~20/poll | Compact status line |
+| Phase 4 (result cards) | 150-250 | Summary table |
+| **Total** | **~400-1000** | **0.5-2% of typical 50K-200K run** |
+
 ### Phase 2: Repromptverse prompt pack (~2 minutes)
 
 For EACH agent:
