@@ -331,6 +331,62 @@ Verification scenarios for the RePrompter skill. Run these manually to validate 
 - Re-plan: a second `buildExecutionPlan` after execution reflects the newly collected outcome data
 - Telemetry includes `fingerprint_recipe`, `collect_outcome`, and `learn_strategy` stage events
 
+## Scenario 34: Dimension Interview - Low Specificity Triggers Question
+
+**Input:** "repromptverse - audit the system"
+**Expected:** Specificity scores < 5. Interview asks scope clarification with dynamic options derived from codebase top-level directories.
+**Verify:** AskUserQuestion called, options reference actual project modules, interviewContext.scope is populated.
+
+## Scenario 35: Dimension Interview - High Score Skips Interview
+
+**Input:** "repromptverse - audit auth module and payment gateway for SQL injection, CSRF, and token expiry. Min 10 findings per agent. Frontend out of scope."
+**Expected:** All askable dimensions (Clarity, Specificity, Constraints, Decomposition) score >= 5. Interview skipped entirely.
+**Verify:** No AskUserQuestion call, Plan Cards shown immediately after raw score.
+
+## Scenario 36: Plan Cards + User Confirmation Before Execution
+
+**Input:** Any Repromptverse task.
+**Expected:** Plan Cards table shown after team plan, user confirmation requested before execution.
+**Verify:** Table includes all agents with role, scope, excludes, output path. Execution does not start until user confirms.
+
+## Scenario 37: Result Cards Rendered After Execution
+
+**Input:** Any completed Repromptverse run.
+**Expected:** Result Cards table shown after all agents complete (or retry), before synthesis.
+**Verify:** Table includes score, finding count, key insight per agent. Total row shows aggregate stats.
+
+## Scenario 38: Interview Context Flows Into Agent Constraints
+
+**Input:** "repromptverse - audit katman" then answer interview with "frontend out of scope" and "min 10 findings"
+**Expected:** Every agent's `<constraints>` includes "Frontend out of scope". Every agent's `<success_criteria>` includes "minimum 10 findings".
+**Verify:**
+- Read agent prompts from `/tmp/rpt-agent-prompts-*.md`, confirm interview context is embedded
+- Plan Cards table distinguishes interview-sourced vs auto-detected constraints
+
+## Scenario 39: Dimension Interview - Maximum Questions (All Dimensions Low)
+
+**Input:** "repromptverse - do stuff to the thing"
+**Expected:** All 4 askable dimensions (Clarity, Specificity, Constraints, Decomposition) score < 5. Exactly 4 questions asked in priority order (lowest score first). Structure is NOT asked about.
+**Verify:** 4 AskUserQuestion calls, no Structure question, priority ordering matches score ranking.
+
+## Scenario 40: Status Line Rendered During Polling
+
+**Input:** Any Repromptverse task during Phase 3 execution.
+**Expected:** Each poll cycle shows compact status line with emoji indicators.
+**Verify:** Status line format matches `Agents: ✅ N/T ⏳ N/T 🔄 N/T` pattern. Retry agents show retry count.
+
+## Scenario 41: Interview Dismissed - Graceful Fallback
+
+**Input:** "repromptverse - audit the system" then skip/dismiss all interview questions.
+**Expected:** Proceed with empty interviewContext. Plan Cards show "Interview: skipped by user".
+**Verify:** No interviewContext applied to agent prompts. Team plan uses auto-detected context only.
+
+## Scenario 42: Plan Cards Re-render After User Adjustment
+
+**Input:** Any Repromptverse task. After Plan Cards shown, user says "remove the config reviewer agent" or "add a testing agent".
+**Expected:** Team plan adjusted per user request. Plan Cards re-rendered with updated agent roster.
+**Verify:** Updated Plan Cards table reflects the change. User confirmation gate asked again with new plan.
+
 ---
 
 ## Anti-Patterns (Should NOT Happen)
@@ -342,3 +398,7 @@ Verification scenarios for the RePrompter skill. Run these manually to validate 
 | Cross-project context leakage | Session isolation must be enforced |
 | Generate in English for non-English input | Should match input language |
 | Skip task-specific questions for complex prompts | Domain-specific questions are mandatory |
+| Launch agents without showing Plan Cards | User must see agent plan before $2-4 execution |
+| Write synthesis without Result Cards | Result summary is mandatory before synthesis |
+| Ask Structure questions in Dimension Interview | Structure is auto-fixed, never asked |
+| Show Dimension Interview for high-score prompts | All askable dimensions >= 5 means skip |

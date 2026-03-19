@@ -4,7 +4,7 @@ description: |
   Transform messy prompts into well-structured, effective prompts — single or multi-agent.
   Use when: "reprompt", "reprompt this", "clean up this prompt", "structure my prompt", rough text needing XML tags and best practices, "reprompter teams", "repromptverse", "run with quality", "smart run", "smart agents", "multi-agent marketing", "campaign swarm", "engineering swarm", "ops swarm", "research swarm", multi-agent tasks, audits, parallel work, anything going to agent teams.
   Don't use when: simple Q&A, pure chat, immediate execution-only tasks. See "Don't Use When" section for details.
-  Outputs: Structured XML/Markdown prompt, quality score (before/after), optional team brief + per-agent sub-prompts, agent team output files.
+  Outputs: Structured XML/Markdown prompt, quality score (before/after), optional team brief + per-agent sub-prompts, agent team output files, Agent Cards (plan/status/result).
   Success criteria: Single mode quality score ≥ 7/10; Repromptverse per-agent prompt quality score 8+/10; all required sections present, actionable and specific.
 compatibility: |
   Single mode works on Claude surfaces, OpenClaw, and Codex.
@@ -12,12 +12,12 @@ compatibility: |
   Sequential fallback works with any LLM runtime.
 metadata:
   author: AytuncYildizli
-  version: 9.2.1
+  version: 10.0.0
 ---
 
-# RePrompter v9.2.1
+# RePrompter v10.0.0
 
-> **Your prompt sucks. Let's fix that.** Single prompts or full agent teams — one skill, two modes.
+> **Your prompt sucks. Let's fix that.** Single prompts or full agent teams — one skill, two modes. **v10.0 adds Dimension Interview + Agent Cards to Repromptverse.**
 
 ---
 
@@ -26,7 +26,7 @@ metadata:
 | Mode | Trigger | What happens |
 |------|---------|-------------|
 | **Single** | "reprompt this", "clean up this prompt" | Interview → structured prompt → score |
-| **Repromptverse** | "reprompter teams", "repromptverse", "run with quality", "smart run", "smart agents", "campaign swarm", "engineering swarm", "ops swarm", "research swarm" | Plan team → reprompt each agent → execute (tmux/TeamCreate/sessions_spawn/Codex/sequential) → evaluate → retry |
+| **Repromptverse** | "reprompter teams", "repromptverse", "run with quality", "smart run", "smart agents", "campaign swarm", "engineering swarm", "ops swarm", "research swarm" | Dimension Interview → Plan team → Agent Cards → reprompt each agent → execute → Result Cards → evaluate → retry |
 
 Auto-detection: if task mentions 2+ systems, "audit", or "parallel" → ask: "This looks like a multi-agent task. Want to use Repromptverse mode?"
 
@@ -222,10 +222,10 @@ Auto-detect tech stack from current working directory ONLY:
 ```
 Raw task in → quality output out. Every agent gets a reprompted prompt.
 
-Phase 1: Score raw prompt, plan team, define roles (YOU do this, ~30s)
+Phase 1: Score raw prompt, dimension interview if needed, plan team, show Agent Cards (YOU do this, ~45s)
 Phase 2: Write XML-structured prompt per agent (YOU do this, ~2min)
 Phase 3: Launch agents (tmux, TeamCreate, sessions_spawn, Codex, or sequential) (AUTOMATED)
-Phase 4: Read results, score, retry if needed (YOU do this)
+Phase 4: Show Result Cards, score, retry if needed (YOU do this)
 ```
 
 **Key insight:** The reprompt phase costs ZERO extra tokens — YOU write the prompts, not another AI.
@@ -253,13 +253,153 @@ Then merge with `references/repromptverse-template.md` for routing/termination/e
 Canonical implementation for deterministic routing lives in `scripts/intent-router.js`.
 If docs and code ever diverge, the script is the source of truth for benchmark/testing paths.
 
-### Phase 1: Team plan (~30 seconds)
+### Phase 1: Team plan (~45 seconds)
 
 1. **Score raw prompt** (1-10): Clarity, Specificity, Structure, Constraints, Decomposition
    - Phase 1 uses 5 quick-assessment dimensions. The full 6-dimension scoring (adding Verifiability) is used in Phase 4 evaluation.
-2. **Pick mode:** parallel (independent agents) or sequential (pipeline with dependencies)
-3. **Define team:** 2-5 agents max, each owns ONE domain, no overlap
-4. **Write team brief** to `/tmp/rpt-brief-{taskname}.md` (use unique tasknames to avoid collisions between concurrent runs)
+2. **Dimension Interview gate** — check which askable dimensions scored < 5 (see Dimension Interview section below)
+3. **Pick mode:** parallel (independent agents) or sequential (pipeline with dependencies)
+4. **Define team:** 2-5 agents max, each owns ONE domain, no overlap (informed by interviewContext if interview ran)
+5. **Show Plan Cards** (see Agent Cards section below)
+6. **User confirmation gate** — "Team plan ready. Proceed to execution?" User can approve, adjust, or cancel. In automated/batch runs, auto-proceed.
+7. **Write team brief** to `/tmp/rpt-brief-{taskname}.md` (use unique tasknames to avoid collisions; includes interviewContext section if interview ran)
+
+### Dimension Interview (Repromptverse only)
+
+Score-driven interview for Repromptverse mode. Distinct from Single mode's "Smart Interview" (which uses a standard question list). The Dimension Interview derives questions from low-scoring raw prompt dimensions.
+
+#### Trigger logic
+
+```
+scores = score_raw_prompt(rawInput)  # 5 dimensions from step 1
+
+# Structure is EXCLUDED — reprompter fixes structure via templates.
+# Only 4 dimensions are interview-eligible:
+askable = [d for d in scores if d.name != "Structure" and d.value < 5]
+
+# Threshold: strict less-than. Scores of 5+ do NOT trigger questions.
+if len(askable) == 0:
+    SKIP interview → proceed to step 3 (pick mode)
+elif len(askable) <= 2:
+    ASK 1-2 questions (one per low dimension)
+else:
+    ASK 3-4 questions (max 4, prioritized by lowest score first)
+```
+
+#### Dimension-to-question mapping
+
+| Dimension | Score < 5 triggers | Question approach |
+|-----------|-------------------|-------------------|
+| **Clarity** | Task is ambiguous or multi-interpretable | Open-ended with dynamic options extracted from prompt keywords |
+| **Specificity** | Scope is vague, no concrete targets | Dynamic options from prompt keywords + top-level directory names |
+| **Constraints** | No boundaries defined | "Any areas to exclude?" with context-aware options |
+| **Decomposition** | Unclear work split | "How many independent streams?" with suggested splits |
+
+**Question rules:**
+- Use `AskUserQuestion` with clickable options (consistent with Single mode)
+- Options are **dynamic**: extracted from prompt keywords + codebase context (config files + top-level dirs only — no deep analysis)
+- Every question includes a free-text escape hatch option
+- Priority order: lowest scoring dimension first
+- Language follows user's input language
+
+#### Skip/dismiss handling
+
+- User skips all questions → proceed with empty interviewContext. Plan Cards note: "Interview: skipped by user"
+- User answers some, skips others → populate only answered fields
+
+#### Interview output (interviewContext)
+
+Responses merge into an interviewContext written to the team brief file:
+
+```
+interviewContext = {
+  scope: [from Specificity answer],
+  excludes: [from Constraints answer],
+  successCriteria: [from answers, or omitted — Phase 2 derives from requirements],
+  taskClarification: [from Clarity answer, if asked]
+}
+```
+
+When `successCriteria` is not gathered (question not asked or user skipped), omit the field. Phase 2 derives success criteria from requirements as it does today.
+
+**How interviewContext feeds into later phases:**
+- **Agent count and roles** — scope determines which agents are created
+- **Per-agent `<constraints>`** — excludes injected into each agent's prompt
+- **Per-agent `<success_criteria>`** — user expectations propagated
+- **Template selection** — clarified task type may route to a different swarm profile
+
+**Precedence:** Interview responses override auto-detected codebase context. Conflicts noted in Plan Cards.
+
+**Flywheel:** interviewContext is excluded from recipe fingerprint hash. The fingerprint captures strategy (template + patterns + tier), not user scope answers.
+
+### Agent Cards (transparency layer)
+
+Three fixed-format card types rendered at different phases. Templates are exact — do not invent new formats.
+
+#### Plan Cards — rendered at end of Phase 1 (step 5)
+
+After team plan is complete, before Phase 2 prompt writing. Use this exact table format:
+
+```markdown
+## Team: {N} Opus Agents ({Parallel|Sequential})
+
+| # | Agent | Scope | Excludes | Output |
+|---|-------|-------|----------|--------|
+| 1 | {role} | {scope} | {excludes or "-"} | {output path} |
+| 2 | {role} | {scope} | {excludes or "-"} | {output path} |
+
+Interview context applied: {summary of influence, including override conflicts, or "No interview (high-quality prompt)", or "Interview: skipped by user"}
+```
+
+**Rules:**
+- MUST appear before any agent is launched
+- If interview ran, show which constraints came from interview vs auto-detected
+- If user requests agent adjustments at confirmation gate, re-render Plan Cards with updated team
+- Single-agent runs: table renders with one row (valid)
+
+#### Status Line — rendered during Phase 3 polling
+
+Compact one-line status with each poll cycle:
+
+```
+Agents: ✅ 2/4  ⏳ 1/4  🔄 1/4 (retry 1)
+```
+
+**Emoji mapping:** ✅ = completed, ⏳ = in-progress, 🔄 = retrying
+
+**Rules:**
+- Replace verbose poll output with this compact format
+- Platform-dependent: TeamCreate uses TaskList status; tmux uses best-effort pane parsing; sequential is trivial
+- Show retry count for retrying agents
+
+#### Result Cards — rendered at start of Phase 4
+
+After reading all agent outputs, before synthesis. Use this exact table format:
+
+```markdown
+## Results
+
+| Agent | Score | Findings | Key Insight |
+|-------|-------|----------|-------------|
+| {role} | {score}/10 {pass/retry emoji} | {count} findings | {one-sentence top finding} |
+
+Total: {N} findings | {accepted}/{total} accepted | {retry_count} retries
+```
+
+**Rules:**
+- MUST appear before synthesis is written
+- "Key Insight" = single most important finding per agent (forces prioritization)
+- Retry agents show retry reason in findings column
+
+#### Token budget (Agent Cards + Dimension Interview)
+
+| Phase | Extra tokens | Source |
+|-------|-------------|--------|
+| Phase 1 (interview) | 100-400 | AskUserQuestion calls (0-4 questions) + option generation from config/directory scan |
+| Phase 1 (plan cards) | 100-300 | Table render (varies by team size) |
+| Phase 3 (status) | ~20/poll | Compact status line |
+| Phase 4 (result cards) | 150-250 | Summary table |
+| **Total** | **~400-1000** | **0.5-2% of typical 50K-200K run** |
 
 ### Phase 2: Repromptverse prompt pack (~2 minutes)
 
@@ -281,6 +421,8 @@ Write all to `/tmp/rpt-agent-prompts-{taskname}.md`
 ### Phase 3: Execute
 
 Phase 3 has platform-specific execution methods. Pick the one that matches your environment. The reprompted prompts from Phase 2 work with any method.
+
+**Status Line (all platforms):** During polling, show compact agent status with each cycle. See Agent Cards section for format.
 
 #### Option A: tmux (Claude Code)
 
@@ -309,7 +451,7 @@ Teammate 1 (ROLE): TASK. Write output to /tmp/rpt-{taskname}-{domain}.md. ... Af
 sleep 0.5
 tmux send-keys -t {session} Enter
 
-# 4. Monitor (poll every 15-30s)
+# 4. Monitor (poll every 15-30s) — show Status Line: Agents: ✅ N/T ⏳ N/T 🔄 N/T
 tmux capture-pane -t {session} -p -S -100
 
 # 5. Verify outputs
@@ -347,7 +489,8 @@ tmux kill-session -t {session}
    - [ ] No hallucinated file paths or line numbers
    - [ ] Scope boundaries respected (no overlap with other agents)
 3. Max 2 retries (3 total attempts)
-4. Deliver final report to user
+4. **Show Result Cards** — render summary table before synthesis (see Agent Cards section for format)
+5. Deliver final report to user
 
 **Delta prompt pattern:**
 ```
@@ -387,7 +530,8 @@ Task(subagent_type="general-purpose", team_name="rpt-{taskname}", name="agent-2"
      prompt="You are {role} on the rpt-{taskname} team. Your task is Task #2. [full prompt]",
      run_in_background=true)
 
-# 4. Wait for teammates to complete (messages arrive automatically)
+# 4. Wait for teammates to complete — show Status Line per poll cycle
+# Status Line: Agents: ✅ N/T ⏳ N/T 🔄 N/T (derived from TaskList status)
 # 5. Compile synthesis from teammate reports
 # 6. Shutdown teammates and delete team
 SendMessage(type="shutdown_request", recipient="agent-1")
@@ -658,7 +802,7 @@ Same audit task, 4 Opus agents:
 
 ## Test scenarios
 
-See [TESTING.md](TESTING.md) for 33 verification scenarios + anti-pattern examples.
+See [TESTING.md](TESTING.md) for 42 verification scenarios + anti-pattern examples.
 
 ---
 

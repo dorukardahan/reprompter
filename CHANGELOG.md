@@ -1,5 +1,26 @@
 # RePrompter Changelog
 
+## v10.0.0 (2026-03-19) — Repromptmania
+
+### Added
+- **Dimension Interview** — score-driven interview for Repromptverse Phase 1. Askable dimensions (Clarity, Specificity, Constraints, Decomposition) scoring < 5 trigger targeted AskUserQuestion calls (0-4 questions). Structure excluded (auto-fixed by templates). Interview responses feed into agent planning via interviewContext.
+- **Agent Cards** — three transparency templates for Repromptverse:
+  - **Plan Cards** (Phase 1): team roster table with roles, scopes, excludes, output paths
+  - **Status Line** (Phase 3): compact emoji-based polling status per agent
+  - **Result Cards** (Phase 4): per-agent score, finding count, and key insight summary
+- **User confirmation gate** — Plan Cards shown before execution; user must approve team plan before agents launch
+- 8 new test scenarios (34-41) covering Dimension Interview triggers, Agent Cards rendering, interview-to-constraint flow, and edge cases
+
+### Changed
+- Phase 1 expanded from 4 steps to 7 (score → interview → pick mode → define team → Plan Cards → confirm → write brief)
+- Phase 1 time estimate updated from ~30s to ~45s
+- Phase 4 adds Result Cards as mandatory step before synthesis (step 4 of 5)
+- Phase 3 polling now shows Status Line format across all platform options
+- 4 new anti-patterns added to TESTING.md
+
+### Migration
+- Breaking: Repromptverse Phase 1 now includes optional interview and mandatory confirmation gate. Existing workflows may see new AskUserQuestion calls.
+
 ## v9.2.1 (2026-03-15)
 
 ### Fixed
