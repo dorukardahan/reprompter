@@ -420,6 +420,8 @@ Write all to `/tmp/rpt-agent-prompts-{taskname}.md`
 
 Phase 3 has platform-specific execution methods. Pick the one that matches your environment. The reprompted prompts from Phase 2 work with any method.
 
+**Status Line (all platforms):** During polling, show compact agent status with each cycle. See Agent Cards section for format.
+
 #### Option A: tmux (Claude Code)
 
 ```bash
@@ -447,7 +449,7 @@ Teammate 1 (ROLE): TASK. Write output to /tmp/rpt-{taskname}-{domain}.md. ... Af
 sleep 0.5
 tmux send-keys -t {session} Enter
 
-# 4. Monitor (poll every 15-30s)
+# 4. Monitor (poll every 15-30s) — show Status Line: Agents: ✅ N/T ⏳ N/T 🔄 N/T
 tmux capture-pane -t {session} -p -S -100
 
 # 5. Verify outputs
@@ -525,7 +527,8 @@ Task(subagent_type="general-purpose", team_name="rpt-{taskname}", name="agent-2"
      prompt="You are {role} on the rpt-{taskname} team. Your task is Task #2. [full prompt]",
      run_in_background=true)
 
-# 4. Wait for teammates to complete (messages arrive automatically)
+# 4. Wait for teammates to complete — show Status Line per poll cycle
+# Status Line: Agents: ✅ N/T ⏳ N/T 🔄 N/T (derived from TaskList status)
 # 5. Compile synthesis from teammate reports
 # 6. Shutdown teammates and delete team
 SendMessage(type="shutdown_request", recipient="agent-1")
