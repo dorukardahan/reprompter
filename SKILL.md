@@ -800,7 +800,7 @@ Same audit task, 4 Opus agents:
 
 ## Test scenarios
 
-See [TESTING.md](TESTING.md) for 33 verification scenarios + anti-pattern examples.
+See [TESTING.md](TESTING.md) for 41 verification scenarios + anti-pattern examples.
 
 ---
 
