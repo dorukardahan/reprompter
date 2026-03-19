@@ -487,7 +487,8 @@ tmux kill-session -t {session}
    - [ ] No hallucinated file paths or line numbers
    - [ ] Scope boundaries respected (no overlap with other agents)
 3. Max 2 retries (3 total attempts)
-4. Deliver final report to user
+4. **Show Result Cards** — render summary table before synthesis (see Agent Cards section for format)
+5. Deliver final report to user
 
 **Delta prompt pattern:**
 ```
