@@ -76,7 +76,7 @@ the final report to /tmp/rpt-{taskname}-final.md.
 
 ### Known gotchas (as of 0.121.0)
 
-- **Issue #14866** — subagents could get stuck in "awaiting instruction" when model routing misfired. Closed with a linked fix in 0.121.0; if you still see it, kill and respawn the stuck worker.
+- **Issue #14866** — subagents could get stuck in "awaiting instruction" when model routing misfired. Closed with a linked fix; if you still see it, kill and respawn the stuck worker.
 - **Issue #15177** — still open as of 2026-04-18. A custom-role `model` override (e.g., `gpt-5.4-mini`) can leak back to the parent model (`gpt-5.4`) in child metadata. Prefer the built-in `default` role, or accept the leak, when model fidelity matters.
 - Each subagent consumes tokens independently — plan budget accordingly.
 
@@ -149,6 +149,7 @@ exec 9<>"$sem"
 rm "$sem"
 for _ in $(seq 1 "$MAX_PARALLEL"); do echo >&9; done
 
+pids=()
 for agent in "${AGENTS[@]}"; do
   read -u 9
   (
@@ -157,9 +158,18 @@ for agent in "${AGENTS[@]}"; do
       "$(cat "/tmp/rpt-${TASKNAME}-${agent}.prompt.md")" \
       > "/tmp/rpt-${TASKNAME}-${agent}.stdout" 2>&1
   ) &
+  pids+=("$!")
 done
-wait
+
+# Wait on explicit PIDs so a failing worker surfaces instead of being
+# hidden by `wait` without args. The D2 retry contract requires failure
+# visibility at this layer so the caller can retry individual agents.
+status=0
+for pid in "${pids[@]}"; do
+  wait "$pid" || status=1
+done
 exec 9>&-
+# Caller can read `$status` (non-zero = at least one worker failed).
 ```
 
 ### Status Line
@@ -167,12 +177,21 @@ exec 9>&-
 Codex CLI has no built-in TaskList. Derive status from artifact presence. **Exclude `.prompt.md` input files** — they share the `rpt-${TASKNAME}-*.md` glob with artifacts, and counting them falsely reports "done" before any agent has written output:
 
 ```bash
-done=$(ls /tmp/rpt-${TASKNAME}-*.md 2>/dev/null | grep -v '\.prompt\.md$' | wc -l | tr -d ' ')
+# Zero-match-safe loop. Safe under `set -euo pipefail` even when no
+# artifacts exist yet or only .prompt.md inputs are present — both of
+# which would abort an `ls | grep | wc` pipeline (ls exits 2 on no
+# match; grep exits 1 on no output).
+done=0
+for f in /tmp/rpt-${TASKNAME}-*.md; do
+  [[ -e "$f" ]] || continue           # glob returned the literal pattern
+  [[ "$f" == *.prompt.md ]] && continue
+  done=$((done + 1))
+done
 total=${#AGENTS[@]}
 echo "Agents: ✅ $done/$total  ⏳ $((total-done))/$total"
 ```
 
-Why `ls | grep` instead of `find`: on macOS `/tmp` is a symlink to `/private/tmp`, and `find /tmp -maxdepth 1` does not descend through the symlink without `-L`. Shell glob expansion resolves the path transparently and works on both Linux and macOS without a flag.
+Why a loop instead of `find`: on macOS `/tmp` is a symlink to `/private/tmp`, and `find /tmp -maxdepth 1` does not descend through the symlink without `-L`. Shell glob expansion resolves the path transparently and works on both Linux and macOS without a flag.
 
 ### Retries
 

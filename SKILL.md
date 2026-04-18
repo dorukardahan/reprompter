@@ -779,14 +779,21 @@ ls /tmp/rpt-{taskname}-*.md 2>/dev/null | grep -v '\.prompt\.md$'
 Status Line during execution: Codex CLI has no built-in TaskList. Derive status from artifact presence — crucially, **exclude the `.prompt.md` input files** or the counter will report "done" before any agent writes output:
 
 ```bash
-done=$(ls /tmp/rpt-{taskname}-*.md 2>/dev/null | grep -v '\.prompt\.md$' | wc -l | tr -d ' ')
+# Zero-match-safe loop — does not abort under `set -euo pipefail` when
+# no artifacts exist yet or only .prompt.md inputs are present.
+done=0
+for f in /tmp/rpt-{taskname}-*.md; do
+  [[ -e "$f" ]] || continue         # glob returned literal (no matches)
+  [[ "$f" == *.prompt.md ]] && continue
+  done=$((done + 1))
+done
 total=3
 echo "Agents: ✅ $done/$total  ⏳ $((total-done))/$total"
 ```
 
 **Retries:** Re-run `codex exec` for the failing agent with the delta prompt (Phase 4). Do NOT re-run the whole fleet.
 
-**Concurrency cap (D2):** Default to 4 or `nproc`, whichever is lower. More than 4 concurrent Codex sessions against the same account can hit rate limits.
+**Concurrency cap (D2):** Default to 4 or the CPU count, whichever is lower. On Linux use `nproc`; on macOS use `sysctl -n hw.ncpu`. More than 4 concurrent Codex sessions against the same account can hit rate limits.
 
 **If `wait` hangs (D2):** one agent stalled. Inspect `/tmp/rpt-{taskname}-*.stdout`, kill that PID, retry just that agent.
 
@@ -801,6 +808,7 @@ echo "Agents: ✅ $done/$total  ⏳ $((total-done))/$total"
 | Orchestrating from CI or shell script outside Codex | D2 |
 | You want fresh context per worker without re-ingesting the codebase | D1 |
 | Codex < 0.121.0 or `multi_agent` feature disabled | D2 |
+| Cross-agent messaging required mid-run | Neither — use Option B (TeamCreate in Claude Code) |
 
 #### Option E: Sequential (any LLM)
 
