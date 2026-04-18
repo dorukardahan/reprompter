@@ -232,7 +232,7 @@ All benchmarks at 100%: routing (64/64), artifacts (84/84), flywheel (13/13), pr
 | Multi-agent parallel | yes | yes | yes | - |
 | Multi-agent sequential | yes | yes | yes | yes |
 
-Codex parallel paths: **D1 native subagents** (Codex CLI 0.121.0+, `[features] multi_agent = true`) or **D2 shell-level** (`codex exec --ephemeral --full-auto` + background + `wait`). See SKILL.md Option D and `references/runtime/codex-runtime.md`.
+Codex parallel paths: **D1 native subagents** (Codex CLI 0.121.0+, `multi_agent` default-enabled) or **D2 shell-level** (`codex exec --ephemeral --sandbox <mode>` + background + `wait`; pass `--full-auto` only when workers need `workspace-write`). See SKILL.md Option D and `references/runtime/codex-runtime.md`.
 
 ---
 

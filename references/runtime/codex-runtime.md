@@ -2,7 +2,7 @@
 
 Canonical reference for running Repromptverse on OpenAI Codex CLI. Used by Phase 3 Option D (D1 native subagents and D2 shell-level parallelism).
 
-**Target:** Codex CLI 0.121.0+ (native subagents shipped 2026-03-16).
+**Target:** Codex CLI 0.121.0+ (`multi_agent` feature flag stabilized in 0.115.0 on 2026-03-16; default-enabled in current releases).
 
 ---
 
@@ -46,11 +46,13 @@ sandbox_mode = "read-only"
 developer_instructions = """
 You are one of N parallel audit workers. Write your findings to the
 artifact path specified by the orchestrator. Cite file:line for every
-claim. Do not speculate. Call report_agent_job_result exactly once
-before going idle.
+claim. Do not speculate. Finish by going idle; the orchestrator reads
+the artifact file, not a tool call.
 """
 # Optional: mcp_servers, nickname_candidates
 ```
+
+**On `report_agent_job_result`:** This tool is registered for `spawn_agents_on_csv` batch workers (one worker per CSV row), not for ordinary prompt-spawned `spawn_agent` subagents. Do not instruct a standard D1 worker to call it — the tool may not be available in that role's tool set. If you need CSV fan-out, see the `spawn_agents_on_csv` section below and put the `report_agent_job_result` instruction in that role's TOML only.
 
 ### Invocation (prompt-driven)
 
@@ -66,7 +68,7 @@ the final report to /tmp/rpt-{taskname}-final.md.
 
 ### Concurrency
 
-`[agents] max_threads` is enforced by the Codex runtime — no FIFO semaphore needed. Submitting 8 workers with `max_threads = 6` queues 2 and runs 6 concurrently.
+`[agents] max_threads` caps open agent threads. Normal `spawn_agent` calls past the cap fail with an `AgentLimitReached` error — they do **not** queue (source: `reserve_spawn_slot` in openai/codex 0.121.0). Keep the orchestrator's fan-out size ≤ `max_threads`. For true fan-out that normalizes requested concurrency against the cap, use `spawn_agents_on_csv` instead.
 
 ### Depth
 
@@ -74,8 +76,8 @@ the final report to /tmp/rpt-{taskname}-final.md.
 
 ### Known gotchas (as of 0.121.0)
 
-- **Issue #14866** — subagents can get stuck in "awaiting instruction" if model routing misfires. Kill and respawn the stuck worker; do not wait indefinitely.
-- **Issue #15177** — `model = "gpt-5.4-mini"` overrides may leak back to `gpt-5.4` in child metadata. Fixed in 0.122.0-alpha.
+- **Issue #14866** — subagents could get stuck in "awaiting instruction" when model routing misfired. Closed with a linked fix in 0.121.0; if you still see it, kill and respawn the stuck worker.
+- **Issue #15177** — still open as of 2026-04-18. A custom-role `model` override (e.g., `gpt-5.4-mini`) can leak back to the parent model (`gpt-5.4`) in child metadata. Prefer the built-in `default` role, or accept the leak, when model fidelity matters.
 - Each subagent consumes tokens independently — plan budget accordingly.
 
 ---
@@ -85,9 +87,10 @@ the final report to /tmp/rpt-{taskname}-final.md.
 ### Invocation
 
 ```bash
+# Audit worker (read-only). Swap `--sandbox read-only` for `--full-auto`
+# when the worker should write fixes.
 codex exec \
   --ephemeral \
-  --full-auto \
   --sandbox read-only \
   --model "$MODEL" \
   --output-last-message "$LOG" \
@@ -95,10 +98,10 @@ codex exec \
   "$PROMPT_TEXT"
 ```
 
-- `--ephemeral` is **required** for parallel runs. Without it, issue #11435 can corrupt sessions via shared session-restore state.
-- `--full-auto` is required so the session runs without interactive approval prompts (blocking bg workers).
+- `--ephemeral` is recommended for parallel runs so backgrounded workers do not write rollout files that could be restored into each other (historical reference: closed issue #11435, which motivated the flag). Not strictly required on current Codex, but still the safe default for isolated fan-out.
+- `--sandbox` picks the access level. Use `read-only` for audits. Use `workspace-write` (or the `--full-auto` alias, which selects workspace-write automatically) for workers that apply fixes. Do **not** combine `--full-auto` with `--sandbox read-only`: `--full-auto` forces `workspace-write` and overrides the read-only claim.
+- `codex exec` defaults approval policy to `never` in headless mode, so you do not need an explicit `-a` flag for backgrounded workers. The global `approval_policy` in `config.toml` applies to the interactive TUI.
 - `--output-last-message` captures the final assistant turn; useful when an artifact is missing post-mortem.
-- `--sandbox read-only` is the right default for audits. Bump to `workspace-write` only if you want fixes applied.
 - `$PROMPT_TEXT` is the full reprompted prompt from Phase 2. Pass via `"$(cat ...)"`; do not pipe via stdin (Codex treats stdin as a conversation continuation in some modes).
 
 ### Artifact contract (shared with `repromptverse-template.md`)
@@ -120,7 +123,6 @@ AGENTS=(methodology code stats narrative attack-surface claims)
 for agent in "${AGENTS[@]}"; do
   codex exec \
     --ephemeral \
-    --full-auto \
     --sandbox read-only \
     --model "$MODEL" \
     --output-last-message "/tmp/rpt-${TASKNAME}-${agent}.log" \
@@ -135,9 +137,9 @@ ls /tmp/rpt-${TASKNAME}-*.md 2>/dev/null | grep -v '\.prompt\.md$'
 
 ### Concurrency cap
 
-Default to 4 or `nproc`, whichever is lower. More than 4 concurrent Codex sessions against the same account can hit rate limits.
+Default to 4 or the CPU count, whichever is lower. On Linux use `nproc`; on macOS use `sysctl -n hw.ncpu`. More than 4 concurrent Codex sessions against the same account can hit rate limits.
 
-For a hard cap, use a FIFO semaphore:
+For a hard cap, use a FIFO semaphore. The `trap` inside the subshell returns the token even when `codex exec` exits non-zero under `set -e`, preventing deadlock:
 
 ```bash
 MAX_PARALLEL=4
@@ -150,13 +152,14 @@ for _ in $(seq 1 "$MAX_PARALLEL"); do echo >&9; done
 for agent in "${AGENTS[@]}"; do
   read -u 9
   (
-    codex exec --ephemeral --full-auto --model "$MODEL" \
+    trap 'echo >&9' EXIT
+    codex exec --ephemeral --sandbox read-only --model "$MODEL" \
       "$(cat "/tmp/rpt-${TASKNAME}-${agent}.prompt.md")" \
       > "/tmp/rpt-${TASKNAME}-${agent}.stdout" 2>&1
-    echo >&9
   ) &
 done
 wait
+exec 9>&-
 ```
 
 ### Status Line

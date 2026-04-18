@@ -690,11 +690,12 @@ Codex CLI 0.121.0+ offers two valid patterns for Repromptverse fan-out. Pick bas
 | Pattern | When to use | Mechanism |
 |---|---|---|
 | **D1: Native subagents** | In-session orchestration, shared context, single synthesis, per-agent TOML role definitions | `[agents]` config + prompt-driven spawn |
-| **D2: Shell-level `codex exec`** | External orchestration, per-agent model/profile, structured stdout/stderr logs, total isolation | `codex exec --ephemeral --full-auto ... &` + `wait` |
+| **D2: Shell-level `codex exec`** | External orchestration, per-agent model/profile, structured stdout/stderr logs, total isolation | `codex exec --ephemeral --sandbox <mode> ... &` + `wait` |
+| _Neither — cross-agent messaging required mid-run_ | Agents must talk while running | Use Option B (TeamCreate in Claude Code) — Codex has no cross-agent messaging primitive |
 
 See `references/runtime/codex-runtime.md` for the full runtime contract (invocation, artifacts, retries, known gotchas).
 
-**D1 — Native subagents (Codex 0.121.0+, shipped 2026-03-16)**
+**D1 — Native subagents (Codex 0.121.0+; `multi_agent` feature flag stabilized in 0.115.0 on 2026-03-16)**
 
 Enable in `~/.codex/config.toml`:
 
@@ -719,10 +720,12 @@ sandbox_mode = "read-only"
 developer_instructions = """
 You are one of N parallel audit workers. Write your findings to the
 artifact path specified by the orchestrator. Cite file:line for every
-claim. Do not speculate. Call report_agent_job_result exactly once
-before going idle.
+claim. Do not speculate. Finish by going idle; the orchestrator reads
+the artifact file, not a tool call.
 """
 ```
+
+**Note:** `report_agent_job_result` is a Codex tool required only by `spawn_agents_on_csv` batch workers, not by ordinary prompt-spawned subagents. Do not add it to the normal D1 `developer_instructions` above — the tool is not registered for standard subagent roles.
 
 Subagents are prompt-driven in Codex (not flag-driven). The orchestrator prompt fans out in natural language:
 
@@ -734,9 +737,9 @@ After all six complete, read their artifacts and synthesize
 the final report to /tmp/rpt-{taskname}-final.md.
 ```
 
-The `[agents] max_threads` cap is enforced natively — no FIFO semaphore needed. Known gotchas: issue #14866 (stuck "awaiting instruction"), #15177 (model override leak in child metadata).
+The `[agents] max_threads` cap is enforced natively — no FIFO semaphore needed. Note: normal `spawn_agent` calls past the cap fail with an `AgentLimitReached` error rather than queueing, so keep the orchestrator's fan-out size ≤ `max_threads`. Known gotchas: issue #14866 (stuck "awaiting instruction", closed with linked fix) and issue #15177 (still open: model override metadata may leak back to parent model — prefer the `default` role when override fidelity matters).
 
-**D2 — Shell-level `codex exec` (portable, any version)**
+**D2 — Shell-level `codex exec` (portable shell-level path, any Codex version with `codex exec` + `--ephemeral`)**
 
 Shell-level parallelism works on any POSIX shell. `codex exec` is one-shot, so backgrounding each agent and waiting is the portable pattern:
 
@@ -745,14 +748,20 @@ Shell-level parallelism works on any POSIX shell. `codex exec` is one-shot, so b
 #    Convention: /tmp/rpt-{taskname}-{agent}.prompt.md
 ls /tmp/rpt-{taskname}-*.prompt.md
 
-# 1. Launch each agent in the background with --ephemeral (avoids
-#    issue #11435: shared session-restore corruption between parallel exec).
+# 1. Launch each agent in the background. Pick --sandbox explicitly for
+#    your use case: `read-only` for audit workers, `workspace-write` (or
+#    the `--full-auto` alias) for agents that write fixes. `--ephemeral`
+#    skips on-disk session state; recommended for isolated parallel runs
+#    so backgrounded workers cannot restore each other's rollout files
+#    (historical reference: closed issue #11435, which motivated the flag).
+#    `codex exec` defaults approval policy to `never` in headless mode,
+#    so no extra approval flag is needed.
 MODEL="gpt-5.4"
 for agent in planner critic synthesizer; do
   codex exec \
     --model "$MODEL" \
     --ephemeral \
-    --full-auto \
+    --sandbox read-only \
     --output-last-message "/tmp/rpt-{taskname}-${agent}.log" \
     "$(cat /tmp/rpt-{taskname}-${agent}.prompt.md)" \
     > "/tmp/rpt-{taskname}-${agent}.stdout" 2>&1 &
@@ -1170,7 +1179,7 @@ Install the skill under `~/.codex/skills/reprompter/` (same structure as `~/.cla
 ```toml
 # ~/.codex/config.toml
 model = "gpt-5.4"          # default model for agent runs
-approval_policy = "never"  # required for --full-auto (Option D2): skip interactive approvals
+approval_policy = "never"  # for interactive Codex TUI only; `codex exec` already defaults to never in headless
 
 [features]
 multi_agent = true         # enables native subagents (Option D1, Codex 0.121.0+)
@@ -1189,8 +1198,8 @@ artifact_root = "/tmp"     # override if your runtime sandboxes /tmp
 | Setting | Values | Effect |
 |---------|--------|--------|
 | `model` | any Codex-supported id | Default model when `--model` is omitted from `codex exec`. |
-| `approval_policy` | `"untrusted"` / `"on-request"` / `"never"` | `never` is required for Option D2 backgrounding (no interactive prompts). `on-request` is the Codex default and blocks backgrounded workers. |
-| `features.multi_agent` | `true` / `false` | Enables native subagents (Option D1). Shipped 2026-03-16. |
+| `approval_policy` | `"untrusted"` / `"on-request"` / `"never"` | Applies to the interactive Codex TUI. `codex exec` runs headless and defaults to `never`, so Option D2 workers never need this key set. |
+| `features.multi_agent` | `true` / `false` | Enables native subagents (Option D1). Default-enabled in current Codex releases (0.121.0+); set explicitly only if your config disabled it. |
 | `agents.max_threads` | integer, default `6` | Concurrent subagent worker cap. |
 | `agents.max_depth` | integer, default `1` | Spawn nesting depth (1 = subagents only, no grandchildren). |
 | `reprompter.default_mode` | `"parallel"` / `"sequential"` | Skill-defined hint consumed by Phase 1. |
