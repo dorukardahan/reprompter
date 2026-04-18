@@ -761,16 +761,16 @@ done
 # 2. Wait for all background sessions.
 wait
 
-# 3. Verify each agent wrote its artifact.
-ls -la /tmp/rpt-{taskname}-*.md
+# 3. Verify each agent wrote its artifact (exclude .prompt.md inputs).
+find /tmp -maxdepth 1 -name 'rpt-{taskname}-*.md' ! -name '*.prompt.md' -print
 
 # 4. Run Phase 4 evaluator loop.
 ```
 
-Status Line during execution: Codex CLI has no built-in TaskList. Derive status from artifact presence:
+Status Line during execution: Codex CLI has no built-in TaskList. Derive status from artifact presence — crucially, **exclude the `.prompt.md` input files** or the counter will report "done" before any agent writes output:
 
 ```bash
-done=$(ls /tmp/rpt-{taskname}-*.md 2>/dev/null | wc -l)
+done=$(find /tmp -maxdepth 1 -name 'rpt-{taskname}-*.md' ! -name '*.prompt.md' 2>/dev/null | wc -l | tr -d ' ')
 total=3
 echo "Agents: ✅ $done/$total  ⏳ $((total-done))/$total"
 ```
@@ -1170,7 +1170,7 @@ Install the skill under `~/.codex/skills/reprompter/` (same structure as `~/.cla
 ```toml
 # ~/.codex/config.toml
 model = "gpt-5.4"          # default model for agent runs
-approval_policy = "auto"   # required for --full-auto (Option D2)
+approval_policy = "never"  # required for --full-auto (Option D2): skip interactive approvals
 
 [features]
 multi_agent = true         # enables native subagents (Option D1, Codex 0.121.0+)
@@ -1189,7 +1189,7 @@ artifact_root = "/tmp"     # override if your runtime sandboxes /tmp
 | Setting | Values | Effect |
 |---------|--------|--------|
 | `model` | any Codex-supported id | Default model when `--model` is omitted from `codex exec`. |
-| `approval_policy` | `"auto"` / `"manual"` | `auto` is required for Option D2 backgrounding (no interactive prompts). |
+| `approval_policy` | `"untrusted"` / `"on-request"` / `"never"` | `never` is required for Option D2 backgrounding (no interactive prompts). `on-request` is the Codex default and blocks backgrounded workers. |
 | `features.multi_agent` | `true` / `false` | Enables native subagents (Option D1). Shipped 2026-03-16. |
 | `agents.max_threads` | integer, default `6` | Concurrent subagent worker cap. |
 | `agents.max_depth` | integer, default `1` | Spawn nesting depth (1 = subagents only, no grandchildren). |

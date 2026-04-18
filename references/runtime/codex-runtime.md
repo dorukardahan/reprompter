@@ -129,7 +129,8 @@ for agent in "${AGENTS[@]}"; do
 done
 
 wait  # blocks until all backgrounded sessions finish
-ls -la /tmp/rpt-${TASKNAME}-*.md
+# Verify each agent wrote its artifact (exclude .prompt.md inputs).
+find /tmp -maxdepth 1 -name "rpt-${TASKNAME}-*.md" ! -name '*.prompt.md' -print
 ```
 
 ### Concurrency cap
@@ -160,10 +161,10 @@ wait
 
 ### Status Line
 
-Codex CLI has no built-in TaskList. Derive status from artifact presence:
+Codex CLI has no built-in TaskList. Derive status from artifact presence. **Exclude `.prompt.md` input files** — they share the `rpt-${TASKNAME}-*.md` glob with artifacts, and counting them falsely reports "done" before any agent has written output:
 
 ```bash
-done=$(ls /tmp/rpt-${TASKNAME}-*.md 2>/dev/null | wc -l)
+done=$(find /tmp -maxdepth 1 -name "rpt-${TASKNAME}-*.md" ! -name '*.prompt.md' 2>/dev/null | wc -l | tr -d ' ')
 total=${#AGENTS[@]}
 echo "Agents: ✅ $done/$total  ⏳ $((total-done))/$total"
 ```
